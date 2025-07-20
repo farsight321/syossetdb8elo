@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Syosset Debate Elo Tracker</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f4f4f4; margin: 0; padding: 20px; }
+        .container { max-width: 1200px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1, h2, h3 { color: #2c3e50; }
+        .grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; }
+        .card { background: #fdfdfd; border: 1px solid #ddd; padding: 20px; border-radius: 5px; }
+        input[type="text"], input[type="number"], input[type="date"], select { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { display: inline-block; background: #3498db; color: #fff; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; transition: background-color 0.2s; }
+        button:hover { background: #2980b9; }
+        button.danger { background: #e74c3c; }
+        button.danger:hover { background: #c0392b; }
+        button.secondary { background: #95a5a6; }
+        button.secondary:hover { background: #7f8c8d; }
+        ul { padding-left: 0; }
+        .list-item { list-style-type: none; padding: 10px; border-bottom: 1px solid #eee; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
+        .item-info { flex-grow: 1; }
+        .item-controls { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
+        .graduated .item-info { color: #7f8c8d; text-decoration: line-through; }
+        .elo-rating { font-weight: bold; color: #2c3e50; }
+        .file-ops { margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee; }
+        .note { background-color: #e8f4fd; border-left: 4px solid #3498db; padding: 10px; margin-top: 15px; font-size: 0.9em; }
+        #annotationsList li { display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #f0f0f0; }
+        .chart-controls { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Syosset Debate Elo Tracker</h1>
+
+        <div class="grid-container">
+            <!-- DEBATER MANAGEMENT CARD -->
+            <div class="card">
+                <h2>Manage Debaters</h2>
+                <label for="debaterName">Debater Name</label>
+                <input type="text" id="debaterName" placeholder="Enter debater's name">
+                <label for="debaterElo">Starting Elo</label>
+                <input type="number" id="debaterElo" value="1500">
+                <button onclick="addDebater()">Add Debater</button>
+                
+                <div style="margin-top: 15px;">
+                    <input type="checkbox" id="showGraduated" onchange="handleShowGraduatedChange()">
+                    <label for="showGraduated">Show Graduated Debaters</label>
+                </div>
+
+                <h3>Debater List</h3>
+                <ul id="debatersList"></ul>
+            </div>
+
+            <!-- PRACTICE ROUND CARD -->
+            <div class="card">
+                <h2>Record Practice Round</h2>
+                <form id="matchForm">
+                    <label for="player1">Winner</label>
+                    <select id="player1" required></select>
+
+                    <label for="player2">Loser</label>
+                    <select id="player2" required></select>
+                    
+                    <button type="button" onclick="recordPracticeRound()">Record Round</button>
+                </form>
+                 <div class="note">
+                    <strong>1v1 Formula Note:</strong> Using zero-sum main change and flipped bonuses.
+                </div>
+            </div>
+            
+            <!-- TOURNAMENT CARD -->
+            <div class="card">
+                <h2>Record Tournament Results</h2>
+                <label for="tournamentName">Tournament Name (for graph)</label>
+                <input type="text" id="tournamentName" placeholder="Optional, e.g., 'State Qualifiers'">
+
+                <div style="display: flex; gap: 10px;">
+                    <div style="flex-basis: 25%;">
+                        <label for="tournamentRounds">Rounds</label>
+                        <input type="number" id="tournamentRounds" placeholder="n">
+                    </div>
+                    <div style="flex-basis: 25%;">
+                         <label for="tournamentBonus">Bonus</label>
+                        <input type="number" id="tournamentBonus" placeholder="b">
+                    </div>
+                     <div style="flex-basis: 25%;">
+                         <label for="tournamentAffectValue">Affect</label>
+                        <input type="number" id="tournamentAffectValue" value="35">
+                    </div>
+                    <div style="flex-basis: 25%;">
+                         <label for="tournamentMaxGain">Max Gain</label>
+                        <input type="number" id="tournamentMaxGain" value="300">
+                    </div>
+                </div>
+                
+                <label for="tournamentAddDebater">Add Participant</label>
+                <select id="tournamentAddDebater" style="margin-bottom: 0;"></select>
+                
+                <label for="tournamentDivision">Competing Division</label>
+                <select id="tournamentDivision">
+                    <option value="Novice">Novice</option>
+                    <option value="JV">JV</option>
+                    <option value="Varsity">Varsity</option>
+                </select>
+                <button onclick="addParticipant()">Add to Tournament</button>
+
+                <ul id="tournamentParticipantsList"></ul>
+
+                <button onclick="recordTournament()" style="width: 100%; margin-top: 10px;">Calculate Tournament Elo</button>
+                 <div class="note" style="background-color: #fffbe6; border-left-color: #f0ad4e;">
+                    <strong>P-Value Note:</strong> The `p` value is calculated using the average Elo of your entire active roster.
+                </div>
+            </div>
+        </div>
+
+        <!-- ANALYTICS CARD -->
+        <div class="card" style="margin-top: 20px;">
+            <h2>Analytics & Data</h2>
+            <div class="grid-container">
+                <div>
+                    <h3>Elo History Graph</h3>
+                    <div class="chart-controls">
+                        <div>
+                            <label for="analyticsDebater">Select Debater</label>
+                            <select id="analyticsDebater" onchange="renderChart()"></select>
+                        </div>
+                        <div>
+                            <input type="checkbox" id="showAnnotations" checked onchange="renderChart()">
+                            <label for="showAnnotations">Show Important Dates</label>
+                        </div>
+                    </div>
+                    <div><canvas id="eloChart"></canvas></div>
+                </div>
+                <div>
+                    <h3>Manage Important Dates</h3>
+                    <input type="date" id="eventDate">
+                    <input type="text" id="eventName" placeholder="Event Name (e.g., 'Practice Tournament')">
+                    <button class="secondary" onclick="addAnnotation()">Mark Date</button>
+                    
+                    <h3 style="margin-top: 20px;">Marked Dates</h3>
+                    <ul id="annotationsList"></ul>
+                    
+                    <div class="file-ops">
+                        <h3>Data Management</h3>
+                        <p>Save a backup file to your computer or import from one.</p>
+                        <button onclick="exportData()">Export to JSON</button>
+                        <input type="file" id="importFile" accept=".json" style="display: none;">
+                        <button class="secondary" onclick="document.getElementById('importFile').click()">Import from JSON</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+let appData = {
+    debaters: [],
+    annotations: []
+};
+let tournamentParticipants = new Map();
+let eloChart = null;
+
+// --- LIFECYCLE & DATA ---
+document.addEventListener('DOMContentLoaded', () => {
+    loadData();
+    document.getElementById('importFile').addEventListener('change', importData);
+});
+
+function loadData() {
+    const storedData = localStorage.getItem('debateEloSystemData');
+    if (storedData) {
+        const parsedData = JSON.parse(storedData);
+        if (Array.isArray(parsedData)) {
+            appData.debaters = parsedData;
+            migrateAnnotations();
+            saveData(); 
+        } else {
+            appData = parsedData;
+        }
+    }
+    refreshAllUI();
+}
+
+function migrateAnnotations() {
+    const allAnnotations = new Map();
+    (appData.debaters || []).forEach(debater => {
+        if (debater.annotations && Array.isArray(debater.annotations)) {
+            debater.annotations.forEach(anno => {
+                const key = `${anno.date}-${anno.name}`;
+                if (!allAnnotations.has(key)) {
+                    allAnnotations.set(key, anno);
+                }
+            });
+        }
+        delete debater.annotations; 
+    });
+    appData.annotations = Array.from(allAnnotations.values());
+    console.log("Data migrated to new global annotations format.");
+}
+
+
+function saveData() {
+    localStorage.setItem('debateEloSystemData', JSON.stringify(appData));
+}
+
+function handleShowGraduatedChange() {
+    refreshAllUI();
+}
+
+function refreshAllUI() {
+    renderDebaters();
+    updateSelects();
+    renderChart();
+    renderAnnotationsList();
+}
+
+
+// --- UI RENDERING ---
+function renderDebaters() {
+    const list = document.getElementById('debatersList');
+    const showGraduated = document.getElementById('showGraduated').checked;
+    list.innerHTML = '';
+    const sortedDebaters = [...appData.debaters].sort((a, b) => b.elo - a.elo);
+    
+    sortedDebaters.forEach(debater => {
+        if (debater.status === 'graduated' && !showGraduated) return;
+        const li = document.createElement('li');
+        li.className = `list-item ${debater.status === 'graduated' ? 'graduated' : ''}`;
+        li.innerHTML = `
+            <div class="item-info">${debater.name} - <span class="elo-rating">${Math.round(debater.elo)}</span></div>
+            <div class="item-controls">
+                <button class="secondary" onclick="setElo('${debater.id}')">Set Elo</button>
+                <button class="secondary" onclick="toggleGraduate('${debater.id}')">${debater.status === 'active' ? 'Graduate' : 'Activate'}</button>
+                <button class="danger" onclick="removeDebater('${debater.id}')">Remove</button>
+            </div>
+        `;
+        list.appendChild(li);
+    });
+}
+
+function updateSelects() {
+    const showGraduated = document.getElementById('showGraduated').checked;
+    
+    const selects = {
+        player1: document.getElementById('player1'),
+        player2: document.getElementById('player2'),
+        analyticsDebater: document.getElementById('analyticsDebater'),
+        tournamentAddDebater: document.getElementById('tournamentAddDebater')
+    };
+
+    for (const key in selects) {
+        const select = selects[key];
+        const currentVal = select.value;
+        select.innerHTML = '<option value="">Select a debater...</option>';
+        
+        if (key === 'analyticsDebater') {
+            const allOption = document.createElement('option');
+            allOption.value = 'ALL';
+            allOption.textContent = '-- All Debaters --';
+            select.appendChild(allOption);
+        }
+
+        let sourceList;
+        if (key === 'analyticsDebater') {
+            sourceList = showGraduated ? appData.debaters : appData.debaters.filter(d => d.status === 'active');
+        } else {
+            sourceList = appData.debaters.filter(d => d.status === 'active');
+        }
+        
+        sourceList.forEach(debater => {
+            if (key === 'tournamentAddDebater' && tournamentParticipants.has(debater.id)) return;
+            const option = document.createElement('option');
+            option.value = debater.id;
+            option.textContent = `${debater.name} (${Math.round(debater.elo)})`;
+            select.appendChild(option);
+        });
+        select.value = currentVal;
+    }
+}
+
+// --- DEBATER MANAGEMENT ---
+function addDebater() {
+    const nameInput = document.getElementById('debaterName');
+    const eloInput = document.getElementById('debaterElo');
+    const name = nameInput.value.trim();
+    const startElo = parseFloat(eloInput.value) || 1500;
+
+    if (!name) { alert('Please enter a name.'); return; }
+    if (appData.debaters.some(d => d.name.toLowerCase() === name.toLowerCase())) { alert('A debater with this name already exists.'); return; }
+
+    const newDebater = {
+        id: Date.now().toString(),
+        name: name,
+        elo: startElo,
+        status: 'active',
+        graduationDate: null,
+        history: [{ date: new Date().toISOString().split('T')[0], elo: startElo }]
+    };
+    appData.debaters.push(newDebater);
+    nameInput.value = '';
+    
+    saveData();
+    refreshAllUI();
+}
+
+function removeDebater(id) {
+    if (confirm('Are you sure you want to permanently remove this debater and all their data?')) {
+        appData.debaters = appData.debaters.filter(d => d.id !== id);
+        tournamentParticipants.delete(id);
+        saveData();
+        refreshAllUI();
+        renderTournamentParticipants();
+    }
+}
+
+function toggleGraduate(id) {
+    const debater = appData.debaters.find(d => d.id === id);
+    if (debater) {
+        if (debater.status === 'active') {
+            debater.status = 'graduated';
+            debater.graduationDate = new Date().toISOString().split('T')[0];
+        } else {
+            debater.status = 'active';
+            debater.graduationDate = null;
+        }
+        saveData();
+        refreshAllUI();
+    }
+}
+
+function setElo(id) {
+    const debater = appData.debaters.find(d => d.id === id);
+    if (!debater) return;
+
+    const currentElo = Math.round(debater.elo);
+    const newEloStr = prompt(`Enter new Elo for ${debater.name}:`, currentElo);
+
+    if (newEloStr === null) return; 
+
+    const newElo = parseFloat(newEloStr);
+
+    if (isNaN(newElo)) {
+        alert("Invalid input. Please enter a number.");
+        return;
+    }
+
+    debater.elo = newElo;
+    const today = new Date().toISOString().split('T')[0];
+    debater.history.push({ date: today, elo: newElo, event: 'Manual Adjustment' });
+
+    saveData();
+    refreshAllUI();
+}
+
+
+// --- PRACTICE ROUND CALCULATION (FORMULA 1) ---
+function recordPracticeRound() {
+    const winnerId = document.getElementById('player1').value;
+    const loserId = document.getElementById('player2').value;
+
+    if (!winnerId || !loserId || winnerId === loserId) {
+        alert('Please select two different debaters.');
+        return;
+    }
+
+    const a = appData.debaters.find(d => d.id === winnerId);
+    const b = appData.debaters.find(d => d.id === loserId);
+
+    const elo_a = a.elo;
+    const elo_b = b.elo;
+
+    const E = 1 / (1 + Math.pow(10, (elo_b - elo_a) / 400));
+    
+    const B_a = 15 * (1 - E);
+    const B_b = 15 * E;
+    
+    const C_a = 100 * (1 - E);
+    const C_b = -C_a;
+
+    const new_elo_a = elo_a + C_a + B_a;
+    const new_elo_b = elo_b + C_b + B_b;
+
+    a.elo = new_elo_a;
+    b.elo = new_elo_b;
+
+    const today = new Date().toISOString().split('T')[0];
+    a.history.push({ date: today, elo: new_elo_a });
+    b.history.push({ date: today, elo: new_elo_b });
+    
+    alert(
+        `Elo Changes:\n\n` +
+        `${a.name} (Winner):\n` +
+        `Old Elo: ${Math.round(elo_a)}\n` +
+        `Change (C): +${C_a.toFixed(2)}, Bonus (B): +${B_a.toFixed(2)}\n` +
+        `New Elo: ${Math.round(new_elo_a)} (Total: +${(new_elo_a - elo_a).toFixed(2)})\n\n` +
+        `${b.name} (Loser):\n` +
+        `Old Elo: ${Math.round(elo_b)}\n` +
+        `Change (C): ${C_b.toFixed(2)}, Bonus (B): +${B_b.toFixed(2)}\n` +
+        `New Elo: ${Math.round(new_elo_b)} (Total: ${(new_elo_b - elo_b).toFixed(2)})`
+    );
+
+    saveData();
+    refreshAllUI();
+    document.getElementById('matchForm').reset();
+}
+
+
+// --- TOURNAMENT CALCULATION (FORMULA 2) ---
+function addParticipant() {
+    const debaterId = document.getElementById('tournamentAddDebater').value;
+    const division = document.getElementById('tournamentDivision').value;
+    if (!debaterId) return;
+
+    const debater = appData.debaters.find(d => d.id === debaterId);
+    if (debater) {
+        tournamentParticipants.set(debater.id, { ...debater, W_raw: 0, division: division });
+        renderTournamentParticipants();
+        updateSelects();
+    }
+}
+
+function renderTournamentParticipants() {
+    const list = document.getElementById('tournamentParticipantsList');
+    list.innerHTML = '';
+    tournamentParticipants.forEach(p => {
+        const li = document.createElement('li');
+        li.className = 'list-item';
+        li.innerHTML = `
+            <div class="item-info">${p.name} <span style="color:#777;">(${p.division})</span></div>
+            <div class="item-controls" style="gap: 10px;">
+                <input type="number" placeholder="Raw Wins" value="${p.W_raw}" onchange="updateParticipantWins('${p.id}', this.value)" style="width: 100px; margin:0;">
+                <button class="danger" onclick="removeParticipant('${p.id}')">X</button>
+            </div>
+        `;
+        list.appendChild(li);
+    });
+}
+
+function updateParticipantWins(id, wins) {
+    if (tournamentParticipants.has(id)) tournamentParticipants.get(id).W_raw = parseInt(wins, 10) || 0;
+}
+
+function removeParticipant(id) {
+    tournamentParticipants.delete(id);
+    renderTournamentParticipants();
+    updateSelects();
+}
+
+function recordTournament() {
+    const n = parseInt(document.getElementById('tournamentRounds').value, 10);
+    const b = parseFloat(document.getElementById('tournamentBonus').value);
+    const k = parseFloat(document.getElementById('tournamentAffectValue').value);
+    const maxGain = parseFloat(document.getElementById('tournamentMaxGain').value);
+    const tournamentName = document.getElementById('tournamentName').value.trim();
+
+    if (isNaN(n) || n <= 0) { alert('Please enter a valid number of rounds (n).'); return; }
+    if (isNaN(b)) { alert('Please enter a valid tournament bonus (b).'); return; }
+    if (isNaN(k)) { alert('Please enter a valid affect value (k).'); return; }
+    if (isNaN(maxGain) || maxGain < 0) { alert('Please enter a valid max Elo gain.'); return; }
+    if (tournamentParticipants.size < 1) { alert('Please add at least one participant.'); return; }
+    
+    const participants = Array.from(tournamentParticipants.values());
+    if (participants.some(p => p.W_raw === undefined || p.W_raw < 0)) { alert('Please enter valid raw wins for every participant.'); return; }
+
+    const t = participants.length;
+
+    const activeDebaters = appData.debaters.filter(d => d.status === 'active');
+    if (activeDebaters.length === 0) {
+        alert("There are no active debaters on the roster to calculate an average Elo.");
+        return;
+    }
+    const e_avg = activeDebaters.reduce((sum, d) => sum + d.elo, 0) / activeDebaters.length;
+
+    let s = 0;
+    participants.forEach(p => {
+        const W_raw = p.W_raw;
+        let W_adjusted;
+
+        if (p.division === 'Novice') {
+            W_adjusted = W_raw;
+        } else {
+             const win_percent = n > 0 ? (W_raw / n) * 100 : 0;
+             if (p.division === 'JV') {
+                W_adjusted = (((-200 / (win_percent + 6.7)) + 30) / 100) * n + W_raw;
+             } else { // Varsity
+                W_adjusted = (((-200 / (win_percent + 4)) + 50) / 100) * n + W_raw;
+             }
+        }
+        
+        p.W_adjusted = W_adjusted;
+        s += p.W_adjusted;
+    });
+
+    const E_tourney = (s + (3 * n / 2)) / (t + 3);
+
+    let results = [];
+    participants.forEach(p => {
+        const p_prop = Math.pow((p.elo / e_avg), 2);
+        let C = k * ((p.W_adjusted / p_prop) - E_tourney) + b;
+        
+        if (C > maxGain) { C = maxGain; }
+
+        results.push({ id: p.id, name: p.name, oldElo: p.elo, newElo: p.elo + C, change: C });
+    });
+
+    const today = new Date().toISOString().split('T')[0];
+    if (tournamentName) {
+        appData.annotations.push({ date: today, name: tournamentName });
+    }
+
+    results.forEach(res => {
+        const debater = appData.debaters.find(d => d.id === res.id);
+        if (debater) {
+            debater.elo = res.newElo;
+            debater.history.push({ date: today, elo: res.newElo, event: 'Tournament' });
+        }
+    });
+
+    const resultsText = results.map(r => `${r.name}: ${Math.round(r.oldElo)} -> ${Math.round(r.newElo)} (${r.change > 0 ? '+' : ''}${r.change.toFixed(1)})`).join('\n');
+    alert(`Tournament Results:\n\n${resultsText}`);
+    
+    tournamentParticipants.clear();
+    document.getElementById('tournamentRounds').value = '';
+    document.getElementById('tournamentBonus').value = '';
+    document.getElementById('tournamentName').value = '';
+    renderTournamentParticipants();
+
+    saveData();
+    refreshAllUI();
+}
+
+
+// --- ANALYTICS & DATA ---
+function renderChart() {
+    const selectedDebaterId = document.getElementById('analyticsDebater').value;
+    const showAnnotations = document.getElementById('showAnnotations').checked;
+    const ctx = document.getElementById('eloChart').getContext('2d');
+    
+    if (eloChart) { eloChart.destroy(); }
+    
+    const chartOptions = {
+        scales: {
+            x: { 
+                type: "time", 
+                time: { unit: "day", tooltipFormat: "MMM d, yyyy" }, 
+                title: { display: true, text: "Date" }
+            }, 
+            y: { 
+                title: { display: true, text: "Elo Rating" }
+            } 
+        },
+        plugins: {
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        if (context.dataset.label === 'Important Events') {
+                            return context.raw.label;
+                        }
+                        return `${context.dataset.label}: ${context.formattedValue}`;
+                    }
+                }
+            }
+        }
+    };
+    
+    const annotationPointStyle = {
+        label: "Important Events",
+        pointStyle: "star",
+        pointRadius: 10,
+        pointBorderWidth: 2,
+        pointBackgroundColor: "#c0392b", // Bolder red
+        pointBorderColor: "#a93226",  // Darker border
+        showLine: false
+    };
+
+    if (selectedDebaterId === 'ALL') {
+        chartOptions.scales.y.min = 0;
+        
+        const showGraduated = document.getElementById('showGraduated').checked;
+        const debatersToGraph = appData.debaters.filter(d => showGraduated || d.status === 'active');
+        
+        let datasets = debatersToGraph.map((debater, index) => {
+            let historyData = debater.history;
+            if (debater.status === 'graduated' && debater.graduationDate) {
+                historyData = historyData.filter(h => new Date(h.date) <= new Date(debater.graduationDate));
+            }
+
+            const color = `hsl(${(index * 360 / debatersToGraph.length)}, 70%, 50%)`;
+            return {
+                label: debater.name,
+                data: historyData.map(h => ({ x: new Date(h.date), y: h.elo })),
+                borderColor: color, backgroundColor: `${color}1A`, fill: false, tension: 0.1
+            };
+        });
+
+        if (showAnnotations) {
+            const annotationsData = (appData.annotations || []).map(a => ({ 
+                x: new Date(a.date), 
+                y: 0, 
+                label: a.name 
+            }));
+            datasets.push({ ...annotationPointStyle, data: annotationsData });
+        }
+
+        eloChart = new Chart(ctx, { type: 'line', data: { datasets: datasets }, options: chartOptions });
+
+    } else {
+        chartOptions.scales.y.min = undefined;
+        
+        const debater = appData.debaters.find(d => d.id === selectedDebaterId);
+        if (!debater || debater.history.length === 0) return;
+
+        let historyData = debater.history;
+        if (debater.status === 'graduated' && debater.graduationDate) {
+             historyData = historyData.filter(h => new Date(h.date) <= new Date(debater.graduationDate));
+        }
+
+        const datasets = [{
+            label: `${debater.name}'s Elo`,
+            data: historyData.map(h => ({ x: new Date(h.date), y: h.elo })),
+            borderColor: '#3498db', backgroundColor: 'rgba(52, 152, 219, 0.1)', fill: true, tension: 0.1
+        }];
+        
+        if (showAnnotations && historyData.length > 0) {
+            const minElo = Math.min(...historyData.map(h => h.elo));
+            const annotationsData = (appData.annotations || []).map(a => ({
+                x: new Date(a.date),
+                y: minElo,
+                label: a.name
+            }));
+            datasets.push({ ...annotationPointStyle, data: annotationsData });
+        }
+        
+        eloChart = new Chart(ctx, { type: "line", data: { datasets: datasets }, options: chartOptions });
+    }
+}
+
+function addAnnotation() {
+    const eventDate = document.getElementById('eventDate').value;
+    const eventName = document.getElementById('eventName').value.trim();
+
+    if (!eventDate || !eventName) {
+        alert('Please pick a date and enter an event name.');
+        return;
+    }
+
+    if (!appData.annotations) appData.annotations = [];
+    appData.annotations.push({ date: eventDate, name: eventName });
+    saveData();
+    refreshAllUI();
+    document.getElementById('eventName').value = '';
+    document.getElementById('eventDate').value = '';
+}
+
+function renderAnnotationsList() {
+    const list = document.getElementById('annotationsList');
+    list.innerHTML = '';
+    if (!appData.annotations || appData.annotations.length === 0) {
+        list.innerHTML = '<li>No global marked dates.</li>';
+        return;
+    }
+
+    appData.annotations.forEach((annotation, index) => {
+        const li = document.createElement('li');
+        li.innerHTML = `
+            <span>${annotation.name} (${annotation.date})</span>
+            <div class="item-controls" style="gap: 10px;">
+                <button class="secondary" style="padding: 2px 8px;" onclick="editAnnotationDate(${index})">Edit Date</button>
+                <button class="danger" style="padding: 2px 8px;" onclick="removeAnnotation(${index})">Remove</button>
+            </div>
+        `;
+        list.appendChild(li);
+    });
+}
+
+function removeAnnotation(index) {
+    if (appData.annotations) {
+        appData.annotations.splice(index, 1);
+        saveData();
+        refreshAllUI();
+    }
+}
+
+function editAnnotationDate(index) {
+    if (!appData.annotations || !appData.annotations[index]) return;
+
+    const annotation = appData.annotations[index];
+    const newDateStr = prompt(`Enter new date for "${annotation.name}":`, annotation.date);
+
+    if (newDateStr === null) return;
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(newDateStr) || isNaN(new Date(newDateStr))) {
+        alert("Invalid date format. Please use YYYY-MM-DD.");
+        return;
+    }
+
+    annotation.date = newDateStr;
+    saveData();
+    refreshAllUI();
+}
+
+
+// --- DATA EXPORT/IMPORT ---
+function exportData(){if(0===appData.debaters.length&&0===appData.annotations.length)return void alert("No data to export.");const t=JSON.stringify(appData,null,2),e=new Blob([t],{type:"application/json"}),a=URL.createObjectURL(e),n=document.createElement("a");n.href=a;const d=new Date().toISOString().split("T")[0];n.download=`syosset_debate_elo_backup_${d}.json`,n.click(),URL.revokeObjectURL(a)}function importData(t){const e=t.target.files[0];if(e&&confirm("Are you sure you want to import this file? This will overwrite all current data.")){const a=new FileReader;a.onload=function(t){try{const e=JSON.parse(t.target.result);e&&Array.isArray(e.debaters)&&Array.isArray(e.annotations)?(appData=e,saveData(),location.reload()):alert("Invalid file format. The file must be a backup from this tool.")}catch(t){alert("Error reading or parsing the file."),console.error(t)}},a.readAsText(e),t.target.value=""}}
+
+</script>
+
+</body>
+</html>
